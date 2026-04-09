@@ -1,0 +1,7 @@
+#!/bin/bash
+
+echo "===== DIAGNOSTICO DEL SISTEMA ====="
+echo "Hostname: $(hostname)"
+echo "IP: $(hostname -I)"
+echo "Espacio en disco:"
+df -h /

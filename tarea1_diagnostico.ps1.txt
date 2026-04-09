@@ -1,0 +1,5 @@
+Write-Host "===== BIENVENIDA ====="
+Write-Host "Equipo: $env:COMPUTERNAME"
+Write-Host "IP:"
+(Get-NetIPAddress | Where-Object {$_.AddressFamily -eq "IPv4"}).IPAddress
+Get-PSDrive -PSProvider FileSystem
