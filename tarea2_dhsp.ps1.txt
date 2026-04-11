@@ -1,0 +1,59 @@
+Write-Host "====== CONFIGURACION DHCP ======"
+
+#1. instalacion idempotente
+
+if (!(Get-WindowsFeature -Name DHCP).Installed) {
+    Write-Host "Instalando DHCP..."
+    Install-WindowsFeature -Name DHCP -IncludeManagementTools
+} else {
+    Write-Host "DHCP ya estaba instalado"
+}
+
+#2. Autorizar servidor DHCP
+try {
+    Add-DhcpServerInDC -DnsName $env:COMPUTERNAME -ErrorAction Stop
+    Write-Host "Servidor DHCP autorizado"
+} catch {
+    Write-Host "El servidor ya estaba autorizado"
+}
+
+#3. En esta parte solicitamos los datos
+
+$scopeName = Read-Host "Nombre del scope"
+$startIP = Read-Host "IP inicial"
+$endIP = Read-Host "IP final"
+$gateway = Read-Host "Gateway"
+$dns = Read-Host "DNS"
+$scopeId = "192.168.100.0"
+
+#4. Crear scope
+if (!(Get-DhcpServerv4Scope | Where-Object {$_.ScopeId -eq $scopeId})) {
+    Add-DhcpServerv4Scope `
+        -Name $scopeName `
+        -StartRange $startIP `
+        -EndRange $endIP `
+        -SubnetMask 255.255.255.0
+    Write-Host "Scope Creado Correctamente"
+} else {
+    Write-Host "El Scope ya existe"
+}
+
+#5 Configuracion de opciones entre gateway y DNS
+Set-DhcpServerv4OptionValue `
+    -ScopeId $scopeId `
+    -Router $gateway `
+    -DnsServer $dns `
+    -Domain $dns
+
+Write-Host "Opciones configuradas"
+
+#6 Reiniciar servicio
+Restart-Service DHCPServer
+Write-Host "Servicio reiniciado"
+
+#7 Estado del servicio
+Get-Service DHCPServer
+
+#8 mostrar leases
+Write-Host "===== CLIENTES DHCP ====="
+Get-DhcpServerv4Lease -ScopeId $scopeId
