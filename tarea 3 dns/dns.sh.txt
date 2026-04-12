@@ -1,0 +1,45 @@
+#!/bin/bash
+
+echo "===== CONFIGURACION DNS LINUX ====="
+
+#INSTALACION IDEMPOTENTE
+if dpkg -l | grep -q bind9; then
+    echo "BIND9 ya instalado"
+else
+    echo "Instalando BIND9..."
+    echo apt-get update -y
+    echo apt-get install bind9 bind9utils bind9-doc -y
+fi
+
+#pedir IP destino
+read -p "IP cliente: " IP
+
+#configurar zona
+sudo bash -c 'cat > /etc/bind/named.conf.local' <<EOF
+zone "reprobados.com" {
+    type master;
+    file "/var/cache/bind/db.reprobados.com";
+};
+EOF
+
+#Crear archivo de zona
+sudo bash -c "cat > /var/cache/bind/db.reprobados.com" <<EOF
+\$TTL 604800
+@   IN  SOA reprobados.com. root.reprobados.com. (
+                2
+                604800
+                86400
+                2419200
+                604800 )
+@   IN  NS  ns.reprobados.com.
+ns  IN  A   192.168.100.10
+@   IN  A   192.168.100.30
+www IN  A   192.168.100.30
+EOF
+
+#VALIDAR
+sudo named-checkconf
+sudo named-checkzone reprobados.com /var/cache/bind/db.reprobados.com
+
+#reiniciar
+sudo systemctl restart bind9
