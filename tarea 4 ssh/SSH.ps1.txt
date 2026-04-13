@@ -1,0 +1,17 @@
+function Configurar-SSH {
+
+    Write-Host "===== SSH WINDOWS ====="
+
+    Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0
+
+    Start-Service sshd
+    Set-Service -Name sshd -StartupType Automatic
+
+    New-NetFirewallRule -name "SSH" -DisplayName "SSH" `
+    -Protocol TCP `
+    -LocalPort 22 `
+    -Action Allow `
+    -ErrorAction SilentlyContinue
+
+    Write-Host "SSH configurado"
+}

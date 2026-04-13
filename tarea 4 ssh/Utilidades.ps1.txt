@@ -1,0 +1,11 @@
+function Verificar-Admin {
+    $admin = [Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()
+    if (!$admin.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+        Write-Host "Ejecuta como administrador"
+        exit
+    }
+}
+
+function Leer-IP {
+    return Read-Host "Ingresa IP"
+}

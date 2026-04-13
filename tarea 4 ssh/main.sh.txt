@@ -1,0 +1,29 @@
+#!/bin/bash
+
+source ./utilidades.sh
+source ./ssh.sh
+source ../tarea1/tarea1_diagnostico.sh
+source ../tarea2/dhcp_linux.sh
+source ../tarea3/dns.sh
+
+verificar_root
+
+while true; do
+    echo "===== MENU ====="
+    echo "1. configurar SSH"
+    echo "2. configurar DNS"
+    echo "3. configurar DHCP"
+    echo "4. Diagnostico"
+    echo "5. salir"
+
+    read op
+
+    case $op in
+        1) configurar_ssh;;
+        2) configurar_dns;;
+        3) configurar_dhcp;;
+        4) diagnostico;;
+        5) exit;;
+        *) echo "Opcion invalida";;
+    esac
+done

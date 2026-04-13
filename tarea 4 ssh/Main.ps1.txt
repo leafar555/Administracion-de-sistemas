@@ -1,0 +1,28 @@
+. .\Utilidades.ps1
+. .\SSH.ps1
+. ..\tarea1\tarea1_diagnostico.ps1
+. ..\tarea2\dhcp.ps1
+. ..\tarea3\dns.ps1
+
+Verificar-Admin
+
+while ($true) {
+
+    Write-Host "===== MENU ====="
+    Write-Host "1. SSH"
+    Write-Host "2. DNS"
+    Write-Host "3. DHCP"
+    Write-Host "4. Diagnostico"
+    Write-Host "5. salir"
+
+    $op = Read-Host "Opcion"
+
+    switch ($op) {
+        1 { Configurar-SSH }
+        2 { Configurar-DNS }
+        3 { Configurar-DHCP }
+        4 { Diagnostico }
+        5 { break }
+        default {Write-Host "Opcion invalida" }
+    }
+}
