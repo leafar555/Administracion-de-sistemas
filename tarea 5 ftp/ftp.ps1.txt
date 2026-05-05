@@ -1,0 +1,201 @@
+#===========================
+# FTP WINDOWS
+#===========================
+
+$RAIZ = "C:\FTP"
+$PUBLICO = "$RAIZ\general"
+$GRUPOS = @("reprobados","recursadores")
+$SITIO = "FTP_RAFA"
+
+#===========================
+function Instalar-FTP {
+    Write-Host "instalando IIS + FTP..."
+
+    Install-WindowsFeature Web-Server,Web-Ftp-Server -IncludeManagementTools
+
+    Import-Module WebAdministration
+}
+
+#===========================
+function Crear-Grupos {
+    foreach ($g in $GRUPOS) {
+        if (!(Get-LocalGroup -Name $g -ErrorAction SilentlyContinue)) {
+            New-LocalGroup -Name $g
+            Write-Host "Grupo $g creado"
+        }
+    }
+}
+
+#===========================
+function Crear-Estructura {
+
+    Write-Host "Creando Estructura base ..."
+
+    mkdir $RAIZ -Force | Out-Null
+    mkdir $PUBLICO -Force | Out-Null
+
+    foreach ($g in $GRUPOS) {
+        mkdir "$RAIZ\$g" -Force | Out-Null
+    }
+
+    #permisos
+    icacls $PUBLICO /grant "IUSR:(R)" /T
+    icacls $PUBLICO /grant "Users:(M)" /T
+
+    foreach ($g in $GRUPOS) {
+        icacls "$RAIZ\$g" /grant "${g}:(M)" /T
+    }
+
+    Write-Host "Estructura lista"
+
+}
+
+#===============================
+function Crear-Usuario {
+
+    $user = Read-Host "Usuario"
+    $pass = Read-Host "Password"
+    $grupo = Read-Host "Grupo (reprobados/recursadores)"
+
+    $sec = ConvertTo-SecureString $pass -AsPlainText -Force
+
+    if (!(Get-LocalUser -Name $user -ErrorAction SilentlyContinue)) {
+        New-LocalUser -Name $user -Password $sec -PasswordNeverExpires
+    }
+
+    Add-LocalGroupMember -Group $grupo -Member $user
+
+    # estructura personal
+    $rutaUser = "$RAIZ\$user"
+    mkdir $rutaUser -Force | Out-Null
+    mkdir "$rutaUser\$user" -Force | Out-Null
+
+    # enlaces (estructura requerida)
+    cmd /c mklink /J "$rutaUser\general" "$PUBLICO"
+    cmd /c mklink /J "$rutaUser\$grupo" "$RAIZ\$grupo"
+
+    #permisos
+    icacls $rutaUser /grant "${user}:(M)" /T
+
+    Write-Host "Usuarios $user listo"
+}
+
+#=============================
+function Crear-Usuarios-Masivo {
+
+    $n = Read-Host "Cantidad de usuarios"
+
+    for ($i=1; $i -le $n; $i++) {
+        Write-Host "----- Usuario $i ----"
+        Crear-Usuario
+    }
+}
+
+#=============================
+function Cambiar-Grupo {
+
+    $user = Read-Host "Usuario"
+    $nuevo = Read-Host "Nuevo Grupo"
+
+    foreach ($g in $GRUPOS) {
+        Remove-LocalGroupMember -Group $g -Member $user -ErrorAction SilentlyContinue
+    }
+
+    Add-localGroupMember -Group $nuevo -Member $user
+
+    # actualizar carpeta
+    $rutaUser = "$RAIZ\$user"
+
+    Remove-Item "$rutaUser\reprobados" -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item "$rutaUser\recursadores" -Recurse -Force -ErrorAction SilentlyContinue
+
+    cmd /c mklink /J "$rutaUser\$nuevo" "$RAIZ\$nuevo"
+
+    Write-Host "Grupo actualizado"
+
+}
+
+#===============================
+function Configurar-FTP {
+
+    Write-Host "Configurando sitio FTP..."
+
+    Import-Module WebAdministration
+
+    if (Get-Website -Name $SITIO -ErrorAction SilentlyContinue) {
+        Remove-Website -Name $SITIO
+    }
+
+    New-WebFtpSite -Name $SITIO -Port 21 -PhysicalPath $RAIZ
+
+    # autenticacion
+    Set-ItemProperty "IIS:\Sites\$SITIO" -Name "ftpServer.security.authentication.anonymousAuthentication.enabled" -Value $true
+    Set-ItemProperty "IIS:\Sites\$SITIO" -Name "ftpServer.security.authentication.basicAuthentication.enabled" -Value $true
+
+    Set-ItemProperty "IIS:\Sites\$SITIO" -Name "ftpServer.security.ssl.controlChannelPolicy" -Value 0
+    Set-ItemProperty "IIS:\Sites\$SITIO" -Name "ftpServer.security.ssl.dataChannelPolicy" -Value 0
+
+    # reglas
+    Clear-webConfiguration "/system.ftpServer/security/authorization" -PSPath IIS:\ -Location $SITIO
+
+    Add-webConfiguration "/system.ftpServer/security/authorization" -PSPath IIS:\ -Location $SITIO `
+        -Value @{accessType="Allow"; users="?" ; permissions="Read"}
+
+    Add-webConfiguration "/system.ftpServer/security/authorization" -PSPath IIS:\ -Location $SITIO `
+        -value @{accessType="Allow"; roles="Users"; permissions="Read,Write"}
+
+    Restart-Service ftpsvc
+
+    Write-Host "FTP activo"
+}
+
+#==========================================
+function Firewall {
+
+    New-NetFirewallRule -DisplayName "FTP 21" -Direction Inbound -Protocol TCP -LocalPort 21 -Action Allow
+    New-NetFirewallRule -DisplayName "FTP PASIVO" -Direction Inbound -Protocol TCP -LocalPort 40000-50000 -Action Allow
+
+    Write-Host "Firewall listo"
+}
+
+#===========================================
+function Estado {
+
+    Get-Service ftpsvc
+    Get-Website -Name $SITIO
+
+}
+
+#===========================================
+function Menu {
+
+    while ($true) {
+
+        Write-Host ""
+        Write-Host "===== FTP WINDOWS ====="
+        Write-Host "1. Instalar FTP"
+        Write-Host "2. Crear estructura"
+        Write-Host "3. Crear grupos"
+        Write-Host "4. Crear Usuarios"
+        Write-Host "5. Configurar FTP"
+        Write-Host "6. Firewall"
+        Write-Host "7. Cambiar grupo"
+        Write-Host "8. Estado"
+        Write-Host "0. Salir"
+
+        $opcion = Read-Host "Opcion"
+
+        switch ($opcion) {
+            "1" { Instalar-FTP }
+            "2" { Crear-Estructura }
+            "3" { Crear-Grupos }
+            "4" { Crear-Usuarios-Masivo }
+            "5" { Configurar-FTP }
+            "6" { Firewall }
+            "7" { Cambiar-Grupo }
+            "8" { Estado }
+            "0" { exit }
+            default { Write-Host "Opcion invalida" }
+        }
+    }
+}
