@@ -1,0 +1,207 @@
+#======================
+# VARIABLES
+#======================
+
+$APACHE_PORT = 8080
+$NGINX_PORT = 8081
+
+#======================
+# INSTALAR CHOCOLATEY
+#======================
+
+function Instalar-Chocolatey {
+
+if (!(Get-Command choco -ErrorAction SilentlyContinue)) {
+
+    Write-Host "Instalando chocolatey"
+
+    Set-ExecutionPolicy Bypass -Scope Process -Force
+
+    [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
+
+    Invoke-Expression ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
+    }
+    else {
+
+    Write-Host "Choclatey ya instalado"
+    }
+}
+
+#======================
+# INSTALAR IIS
+#======================
+
+function Instalar-IIS {
+
+    Write-Host "Instalando IIS..."
+
+    Enable-WindowsOptionalFeature -Online -FeatureName IIS-WebServerRole -All
+
+    iisreset
+
+    Write-Host "IIS funcionando en puerto 80"
+}
+
+#======================
+# INSTALAR APACHE
+#======================
+
+function Instalar-Apache {
+
+    Write-Host "Instalando Apache..."
+
+    choco install apache-httpd -y
+
+    $archivo = "C:\tools\Apache24\conf\httpd.conf"
+
+    (Get-Content $archivo) -replace "Listen 80", "Listen $APACHE_PORT" | Set-Content $archivo
+
+    Start-Service Apache
+    Set-Service Apache -StartupType Automatic
+
+    Write-Host "Apache Funcionando en puerto $APACHE_PORT"
+}
+
+#======================
+# INSTALAR NGINX
+#======================
+
+function Instalar-Nginx {
+
+    Write-Host "Instalando Nginx..."
+
+    if (!(Test-Path "C:\nginx")) {
+
+    Invoke-WebRequest `
+    -Uri "https://nginx.org/download/nginx-1.28.0.zip" `
+    -OutFile "C:\nginx.zip"
+
+    Expand-Archive `
+    -Path "C:\nginx.zip" `
+    -DestinationPath "C:\"
+
+    Rename-Item `
+    -Path "C:\nginx-1.28.0" `
+    -NewName "nginx"
+
+    }
+
+    $archivo = "C:\nginx\conf\nginx.conf"
+
+    (Get-Content $archivo) `
+    -replace "listen $NGINX_PORT;", "listen $NGINX_PORT;" | `
+    Set-Content $archivo
+
+    Start-Process "C:\nginx\nginx.exe"
+
+    Write-Host "Nginx funcionando en puerto $NGINX_PORT"
+}
+
+#======================
+# INSTALAR FIREWALL
+#======================
+
+function Configurar-Firewall {
+
+    Write-Host "Configurando Firewall..."
+
+    New-NetFirewallRule -DisplayName "Apache 8080" -Direction Inbound -Protocol TCP -LocalPort 8080 -Action Allow
+
+    New-NetFirewallRule -DisplayName "Nginx 8081" -Direction Inbound -Protocol TCP -LocalPort 8081 -Action Allow
+
+    New-NetFirewallRule -DisplayName "IIS 80" -Direction Inbound -Protocol TCP -LocalPort 80 -Action Allow
+
+    Write-Host "Firewall Configurado"
+}
+
+#======================
+# CONFIGURAR PERMISOS
+#======================
+
+function Configurar-Permisos {
+
+    Write-Host "Configurando permisos...."
+
+    icacls "C:\inetpub\wwwroot" /grant "Everyone:(RX)" /T
+
+    Write-Host "permisos configurados"
+}
+
+#======================
+# ESTADO
+#======================
+
+function Estado {
+
+    Write-Host ""
+    Write-Host "====== ESTADO DE SERVICIOS ======="
+
+    Get-Service W3SVC
+    Get-Service Apache
+
+    Write-Host ""
+    Write-Host "========= NGINX ========="
+
+    $nginx = Get-Process nginx -ErrorAction SilentlyContinue
+
+    if ($nginx){
+    Write-Host "NGINX: STOPPED"
+    } else {
+    Write-Host "NGINX: RUNNING"
+    }
+
+}
+
+function Menu {
+
+    while ($true) {
+
+    Write-Host ""
+    Write-Host "========= SERVICIOS HTTP WINDOWS========="
+    Write-Host "1. Instalar chocolatey"
+    Write-Host "2. Instalar IIS"
+    Write-Host "3. Instalar Apache"
+    Write-Host "4. Instalar Nginx"
+    Write-Host "5. Configurar Firewall"
+    Write-Host "6. Configurar Permisos"
+    Write-Host "7. Instalar todo"
+    Write-Host "8. Estado"
+    Write-Host "0. Salir"
+
+    $op = Read-Host "Opcion"
+
+    switch ($op) {
+
+    "1" { Instalar-Chocolatey }
+
+    "2" { Instalar-IIS }
+
+    "3" { Instalar-Apache }
+
+    "4" { Instalar-Nginx }
+
+    "5" { Configurar-Firewall }
+
+    "6" { Configurar-Permisos }
+
+    "7" {
+        Instalar-Chocolatey
+        Instalar-IIS
+        Instalar-Apache
+        Instalar-Nginx
+        Configurar-Firewall
+        Configurar-Permisos
+        }
+    "8" { Estado }
+    "0" { exit }
+
+    default { Write-Host "Opcion Invalida" }
+    }
+  }
+}
+
+#======================
+# EJECUCION
+#======================
+
+Menu

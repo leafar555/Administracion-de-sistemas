@@ -1,0 +1,188 @@
+#!/bin/bash
+
+#===========================
+# VARIABLES
+#===========================
+
+APACHE_PORT=8080
+NGINX_PORT=8081
+TOMCAT_PORT=8082
+
+#===========================
+# VERIFICAR ROOT
+#===========================
+
+verificar_root() {
+
+    if [ "$EUID" -ne 0 ]; then
+        echo "Ejecuta como root"
+        exit 1
+    fi
+}
+
+#===========================
+# INSTALAR APACHE
+#===========================
+
+instalar_apache() {
+
+    echo "Instalando Apache..."
+
+    apt update -y
+    apt install apache2 -y
+
+    sed -i "s/80/$APACHE_PORT/g" /etc/apache2/ports.conf
+    sed -i "s/:80/:$APACHE_PORT/g" /etc/apache2/sites-available/000-default.conf
+
+    systemctl restart apache2
+    systemctl enable apache2
+
+    echo "<h1>Apache funcionando</h1>" > /var/www/html/index.html
+
+    echo "Apache funcionando en puerto $APACHE_PORT"
+}
+
+#===========================
+# INSTALAR NGINX
+#===========================
+
+instalar_nginx() {
+
+    echo "Instalando Nginx..."
+
+    apt install nginx -y
+
+    sed -i "s/listen 80 default_server;/listen $NGINX_PORT default_server;/g" /etc/nginx/sites-available/default
+
+    sed -i "s/listen \[::\]:80 default_server;/listen [::]:$NGINX_PORT default_server;/g" /etc/nginx/sites-available/default
+
+    systemctl restart nginx
+    systemctl enable nginx
+
+    echo "<h1>Nginx funcionando</h1>" > /var/www/html/index.nginx-debian.html
+
+    echo "Nginx funcionando en puerto $NGINX_PORT"
+}
+
+#===========================
+# INSTALAR TOMCAT
+#===========================
+
+instalar_tomcat() {
+
+    echo "Instalando Tomcat..."
+
+    apt install tomcat10 -y
+
+    sed -i "s/port=\"8080\"/port=\"$TOMCAT_PORT\"/g" /var/lib/tomcat10/conf/server.xml
+
+    systemctl restart tomcat10
+    systemctl enable tomcat10
+
+    echo "Tomcat funcionando en puerto $TOMCAT_PORT"
+}
+
+#===========================
+# CONFIGURAR FIREWALL
+#===========================
+
+configurar_firewall() {
+
+    echo "Configurando firewall..."
+
+    apt install ufw -y
+
+    ufw allow $APACHE_PORT/tcp
+    ufw allow $NGINX_PORT/tcp
+    ufw allow $TOMCAT_PORT/tcp
+
+    ufw --force enable
+
+    echo "Firewall configurado"
+}
+
+#===========================
+# CONFIGURAR PERMISOS
+#===========================
+
+configurar_permisos() {
+
+    echo "Configurando permisos..."
+
+    chmod -R 755 /var/www/html
+    chown -R www-data:www-data /var/www/html
+
+    echo "Permisos configurados"
+}
+
+#===========================
+# ESTADO
+#===========================
+
+estado() {
+
+    echo ""
+    echo "===== ESTADO DE SERVICIOS ====="
+
+    systemctl status apache2 --no-pager
+    systemctl status nginx --no-pager
+    systemctl status tomcat10 --no-pager
+}
+
+#===========================
+# MENU
+#===========================
+
+menu() {
+
+    while true
+    do
+        echo ""
+        echo "===== SERVICIOS HTTP LINUX ====="
+        echo "1. Instalar Apache"
+        echo "2. Instalar Nginx"
+        echo "3. Instalar Tomcat"
+        echo "4. Configurar Firewall"
+        echo "5. Configurar Permisos"
+        echo "6. Instalar Todo"
+        echo "7. Estado"
+        echo "0. Salir"
+
+        read -p "Opcion: " op
+
+        case $op in
+
+            1) instalar_apache ;;
+
+            2) instalar_nginx ;;
+
+            3) instalar_tomcat ;;
+
+            4) configurar_firewall ;;
+
+            5) configurar_permisos ;;
+
+            6)
+                instalar_apache
+                instalar_nginx
+                instalar_tomcat
+                configurar_firewall
+                configurar_permisos
+            ;;
+
+            7) estado ;;
+
+            0) exit ;;
+
+            *) echo "Opcion invalida" ;;
+
+        esac
+    done
+}
+
+#===========================
+# EJECUCION
+#===========================
+
+verificar_root
+menu
