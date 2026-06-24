@@ -1,0 +1,184 @@
+#Requires -RunAsAdministrator
+
+#========================
+# VARIABLES
+#========================
+
+$SSL_DIR = "C:\SSL"
+$FTP_SITE = "FTP_RAFA"
+
+#========================
+# CREAR DIRECTORIO SSL
+#========================
+
+function Crear-DirectorioSSL {
+
+    if (!(Test-Path $SSL_DIR)) {
+
+        New-Item -ItemType Directory -Path $SSL_DIR -Force | Out-Null
+
+    }
+}
+
+#========================
+# IIS SSL
+#========================
+
+function Configurar-IISSSL {
+
+    Write-Host ""
+    Write-Host "Configurando SSL para IIS..."
+
+    Import-Module WebAdministration
+
+    $cert = New-SelfSignedCertificate -DnsName "localhost" -CertStoreLocation "Cert:\LocalMachine\My" -FriendlyName "IIS-SSL"
+
+    New-WebBinding -Name "Default Web Site" -Protocol https -Port 443 -ErrorAction SilentlyContinue
+
+    iisreset | Out-Null
+
+    Write-Host "IIS SSL configurado"
+    Write-Host "Thumbprint: $($cert.Thumbprint)"
+}
+
+#========================
+# FTP SSL
+#========================
+
+function Configurar-FTPSSL {
+
+    Write-Host ""
+    Write-Host "Configurando SSL para FTP..."
+
+    Import-Module WebAdministration
+
+    $cert = New-SelfSignedCertificate -DnsName "localhost" -CertStoreLocation "Cert:\LocalMachine\My" -FriendlyName "FTP-SSL"
+
+    if (Test-Path "IIS:\Sites\$FTP_SITE") {
+
+        Set-ItemProperty "IIS:\Sites\$FTP_SITE" -Name ftpServer.security.ssl.serverCertHash -Value $cert.Thumbprint -ErrorAction SilentlyContinue
+
+        Set-ItemProperty "IIS:\Sites\$FTP_SITE" -Name ftpServer.security.ssl.controlChannelPolicy -Value 1 -ErrorAction SilentlyContinue
+
+        Set-ItemProperty "IIS:\Sites\$FTP_SITE" -Name ftpServer.security.ssl.dataChannelPolicy -Value 1 -ErrorAction SilentlyContinue
+
+        Restart-Service ftpsvc -Force
+
+        Write-Host "FTP SSL configurado"
+
+    }
+    else {
+
+        Write-Host "No existe el sitio FTP: $FTP_SITE"
+    }
+}
+
+#========================
+# APACHE SSL
+#========================
+
+function Configurar-ApacheSSL {
+
+    Write-Host ""
+    Write-Host "Generando certificado Apache..."
+
+    $cert = New-SelfSignedCertificate -DnsName "localhost" -CertStoreLocation "Cert:\LocalMachine\My" -FriendlyName "Apache-SSL"
+
+    Export-Certificate -Cert $cert -FilePath "$SSL_DIR\apache.crt" -Force | Out-Null
+
+    Write-Host "Certificado Apache generado"
+    Write-Host "Archivo: $SSL_DIR\apache.crt"
+}
+
+#========================
+# NGINX SSL
+#========================
+
+function Configurar-NginxSSL {
+
+    Write-Host ""
+    Write-Host "Generando certificado Nginx..."
+
+    $cert = New-SelfSignedCertificate -DnsName "localhost" -CertStoreLocation "Cert:\LocalMachine\My" -FriendlyName "Nginx-SSL"
+
+    Export-Certificate -Cert $cert -FilePath "$SSL_DIR\nginx.crt" -Force | Out-Null
+
+    Write-Host "Certificado Nginx generado"
+    Write-Host "Archivo: $SSL_DIR\nginx.crt"
+}
+
+#========================
+# ESTADO
+#========================
+
+function EstadoSSL {
+
+    Write-Host ""
+    Write-Host "===== CERTIFICADOS SSL ====="
+
+    Get-ChildItem Cert:\LocalMachine\My |
+    Where-Object { $_.FriendlyName -like "*SSL*" } |
+    Select-Object FriendlyName, Subject, NotAfter
+
+    Write-Host ""
+    Write-Host "===== SERVICIOS ====="
+
+    Get-Service W3SVC -ErrorAction SilentlyContinue
+    Get-Service ftpsvc -ErrorAction SilentlyContinue
+
+    Write-Host ""
+    Write-Host "===== ARCHIVOS ====="
+
+    Get-ChildItem C:\SSL -ErrorAction SilentlyContinue
+}
+
+#========================
+# MENU
+#========================
+
+function Menu {
+
+    while ($true) {
+
+        Write-Host ""
+        Write-Host "===== SSL WINDOWS ====="
+        Write-Host "1. Configurar IIS SSL"
+        Write-Host "2. Configurar FTP SSL"
+        Write-Host "3. Configurar Apache SSL"
+        Write-Host "4. Configurar Nginx SSL"
+        Write-Host "5. Configurar Todo"
+        Write-Host "6. Estado"
+        Write-Host "0. Salir"
+
+        $op = Read-Host "Opcion"
+
+        switch ($op) {
+
+            "1" { Configurar-IISSSL }
+
+            "2" { Configurar-FTPSSL }
+
+            "3" { Configurar-ApacheSSL }
+
+            "4" { Configurar-NginxSSL }
+
+            "5" {
+
+                Crear-DirectorioSSL
+                Configurar-IISSSL
+                Configurar-FTPSSL
+                Configurar-ApacheSSL
+                Configurar-NginxSSL
+            }
+
+            "6" { EstadoSSL }
+
+            "0" { exit }
+
+            default { Write-Host "Opcion invalida" }
+        }
+    }
+}
+
+Crear-DirectorioSSL
+Menu

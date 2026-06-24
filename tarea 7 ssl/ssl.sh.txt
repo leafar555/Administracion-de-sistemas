@@ -1,0 +1,180 @@
+#!/bin/bash
+
+SSL_DIR="/etc/ssl/servidores"
+
+mkdir -p $SSL_DIR
+
+if [ "$EUID" -ne 0 ]; then
+    echo "Ejecuta como root"
+    exit 1
+fi
+
+configurar_apache_ssl() {
+
+    echo "Configurando Apache SSL..."
+
+    openssl req -x509 -nodes -days 365 \
+    -newkey rsa:2048 \
+    -keyout $SSL_DIR/apache.key \
+    -out $SSL_DIR/apache.crt \
+    -subj "/CN=localhost"
+
+    a2enmod ssl
+
+    cat > /etc/apache2/sites-available/ssl.conf << EOF
+<VirtualHost *:8443>
+
+SSLEngine on
+
+SSLCertificateFile $SSL_DIR/apache.crt
+SSLCertificateKeyFile $SSL_DIR/apache.key
+
+DocumentRoot /var/www/html
+
+</VirtualHost>
+EOF
+
+    grep -q "Listen 8443" /etc/apache2/ports.conf || echo "Listen 8443" >> /etc/apache2/ports.conf
+
+    a2ensite ssl.conf
+
+    systemctl restart apache2
+
+    echo "Apache SSL listo en puerto 8443"
+}
+
+configurar_nginx_ssl() {
+
+    echo "Configurando Nginx SSL..."
+
+    openssl req -x509 -nodes -days 365 \
+    -newkey rsa:2048 \
+    -keyout $SSL_DIR/nginx.key \
+    -out $SSL_DIR/nginx.crt \
+    -subj "/CN=localhost"
+
+    cat > /etc/nginx/sites-available/ssl << EOF
+server {
+
+listen 8444 ssl;
+
+ssl_certificate $SSL_DIR/nginx.crt;
+ssl_certificate_key $SSL_DIR/nginx.key;
+
+root /var/www/html;
+
+}
+EOF
+
+    ln -sf /etc/nginx/sites-available/ssl /etc/nginx/sites-enabled/ssl
+
+    systemctl restart nginx
+
+    echo "Nginx SSL listo en puerto 8444"
+}
+
+configurar_tomcat_ssl() {
+
+    echo "Configurando Tomcat10 SSL..."
+
+    keytool -genkeypair \
+    -alias tomcat \
+    -keyalg RSA \
+    -keystore $SSL_DIR/tomcat.jks \
+    -storepass changeit \
+    -keypass changeit \
+    -validity 365 \
+    -dname "CN=localhost"
+
+    cp /etc/tomcat10/server.xml /etc/tomcat10/server.xml.bak
+
+    sed -i '/<\/Service>/i\
+<Connector port="8445" protocol="org.apache.coyote.http11.Http11NioProtocol" \
+SSLEnabled="true" scheme="https" secure="true" \
+keystoreFile="'$SSL_DIR'/tomcat.jks" \
+keystorePass="changeit" />' \
+/etc/tomcat10/server.xml
+
+    systemctl restart tomcat10
+
+    echo "Tomcat10 SSL listo en puerto 8445"
+}
+
+configurar_ftp_ssl() {
+
+    echo "Configurando FTPS..."
+
+    mkdir -p $SSL_DIR/ftp
+
+    openssl req -x509 -nodes -days 365 \
+    -newkey rsa:2048 \
+    -keyout $SSL_DIR/ftp/key.pem \
+    -out $SSL_DIR/ftp/cert.pem \
+    -subj "/CN=localhost"
+
+    cat >> /etc/vsftpd.conf << EOF
+
+ssl_enable=YES
+rsa_cert_file=$SSL_DIR/ftp/cert.pem
+rsa_private_key_file=$SSL_DIR/ftp/key.pem
+force_local_data_ssl=YES
+force_local_logins_ssl=YES
+ssl_tlsv1=YES
+ssl_sslv2=NO
+ssl_sslv3=NO
+EOF
+
+    systemctl restart vsftpd
+
+    echo "FTPS listo"
+}
+
+estado() {
+
+    echo ""
+    echo "===== ESTADO SSL ====="
+
+    systemctl status apache2 --no-pager
+    systemctl status nginx --no-pager
+    systemctl status tomcat10 --no-pager
+    systemctl status vsftpd --no-pager
+}
+
+while true
+do
+
+echo ""
+echo "===== SSL LINUX ====="
+echo "1. Apache SSL"
+echo "2. Nginx SSL"
+echo "3. Tomcat10 SSL"
+echo "4. FTP SSL"
+echo "5. Configurar Todo"
+echo "6. Estado"
+echo "0. Salir"
+
+read -p "Opcion: " op
+
+case $op in
+
+1) configurar_apache_ssl ;;
+2) configurar_nginx_ssl ;;
+3) configurar_tomcat_ssl ;;
+4) configurar_ftp_ssl ;;
+
+5)
+configurar_apache_ssl
+configurar_nginx_ssl
+configurar_tomcat_ssl
+configurar_ftp_ssl
+;;
+
+6) estado ;;
+
+0) exit ;;
+
+*) echo "Opcion invalida" ;;
+
+esac
+
+done
