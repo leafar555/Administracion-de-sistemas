@@ -1,0 +1,54 @@
+#!/bin/bash
+
+DOMAIN="reprobados.local"
+DC="192.168.100.20"
+
+echo "===== ACTUALIZANDO ====="
+apt update -y
+
+echo "===== INSTALANDO PAQUETES ====="
+
+apt install -y \
+realmd \
+sssd \
+sssd-tools \
+sssd-ad \
+adcli \
+samba-common-bin \
+krb5-user \
+packagekit \
+libnss-sss \
+libpam-sss \
+oddjob \
+oddjob-mkhomedir
+
+echo "===== CONFIGURANDO DNS ====="
+
+nmcli con mod netplan-enp0s8 ipv4.dns "$DC"
+nmcli con mod netplan-enp0s8 ipv4.ignore-auto-dns yes
+nmcli con down netplan-enp0s8
+nmcli con up netplan-enp0s8
+
+echo "nameserver $DC" > /etc/resolv.conf
+
+echo "===== DESCUBRIENDO DOMINIO ====="
+
+realm discover $DOMAIN
+
+echo ""
+echo "======================================"
+echo "EJECUTA EL SIGUIENTE COMANDO:"
+echo ""
+echo "sudo realm join -U Administrator $DOMAIN"
+echo ""
+echo "DESPUÉS EJECUTA:"
+echo ""
+echo "realm list"
+echo "sudo pam-auth-update --enable mkhomedir"
+echo "sudo systemctl restart sssd"
+echo ""
+echo "Y PRUEBA:"
+echo ""
+echo "id jesus@$DOMAIN"
+echo "id siomara@$DOMAIN"
+echo "======================================"

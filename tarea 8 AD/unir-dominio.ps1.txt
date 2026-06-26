@@ -1,0 +1,22 @@
+#Requires -RunAsAdministrator
+
+$Dominio = "reprobados.local"
+$DNS = "192.168.100.20"
+
+$Adaptador = Get-NetAdapter |
+Where-Object {$_.Status -eq "Up"} |
+Select-Object -First 1
+
+Set-DnsClientServerAddress `
+-InterfaceIndex $Adaptador.ifIndex `
+-ServerAddresses $DNS
+
+Write-Host "DNS configurado"
+
+$Credenciales = Get-Credential
+
+Add-Computer `
+-DomainName $Dominio `
+-Credential $Credenciales `
+-Restart `
+-Force

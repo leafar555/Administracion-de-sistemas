@@ -1,0 +1,49 @@
+Import-Module ActiveDirectory
+
+$DomainDN = "DC=reprobados,DC=local"
+
+$Pass = ConvertTo-SecureString "Alumno123*" -AsPlainText -Force
+
+# OU Windows
+if (!(Get-ADOrganizationalUnit -Filter "Name -eq 'Windows'" -ErrorAction SilentlyContinue)) {
+    New-ADOrganizationalUnit `
+    -Name "Windows" `
+    -Path $DomainDN
+}
+
+# OU Linux
+if (!(Get-ADOrganizationalUnit -Filter "Name -eq 'Linux'" -ErrorAction SilentlyContinue)) {
+    New-ADOrganizationalUnit `
+    -Name "Linux" `
+    -Path $DomainDN
+}
+
+# Usuario Jesus
+if (!(Get-ADUser -Filter "SamAccountName -eq 'jesus'" -ErrorAction SilentlyContinue)) {
+
+    New-ADUser `
+    -Name "Jesus Contreras" `
+    -GivenName "Jesus" `
+    -Surname "Contreras" `
+    -SamAccountName "jesus" `
+    -UserPrincipalName "jesus@reprobados.local" `
+    -Path "OU=Windows,$DomainDN" `
+    -AccountPassword $Pass `
+    -Enabled $true
+}
+
+# Usuario Siomara
+if (!(Get-ADUser -Filter "SamAccountName -eq 'siomara'" -ErrorAction SilentlyContinue)) {
+
+    New-ADUser `
+    -Name "Siomara" `
+    -GivenName "Siomara" `
+    -Surname "Espinoza" `
+    -SamAccountName "siomara" `
+    -UserPrincipalName "siomara@reprobados.local" `
+    -Path "OU=Linux,$DomainDN" `
+    -AccountPassword $Pass `
+    -Enabled $true
+}
+
+Write-Host "Configuracion completada"
